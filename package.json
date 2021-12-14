@@ -1,0 +1,6 @@
+{
+  "name": "dex-limit-order",
+  "devDependencies": {
+    "hardhat": "^2.7.1"
+  }
+}

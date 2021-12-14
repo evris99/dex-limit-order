@@ -1,0 +1,6 @@
+configuration.toml
+.wallets
+.temp
+pancake.db
+node_modules
+hardhat.config.js
