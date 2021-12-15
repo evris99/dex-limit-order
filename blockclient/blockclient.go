@@ -1,4 +1,4 @@
-package bsc_client
+package blockclient
 
 import (
 	"context"

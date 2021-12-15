@@ -1,13 +1,12 @@
 package manager
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
 	"sync"
 
-	"github.com/evris99/dex-limit-order/bsc_client"
+	"github.com/evris99/dex-limit-order/blockclient"
 	"github.com/evris99/dex-limit-order/database"
 	"github.com/evris99/dex-limit-order/database/model"
 	"github.com/evris99/dex-limit-order/order"
@@ -23,7 +22,7 @@ var (
 
 type Manager struct {
 	Wallet        *wallet.Wallet
-	Client        *bsc_client.Client
+	Client        *blockclient.Client
 	ChainID       int64
 	RouterHex     string
 	OrderChannels map[uint]chan bool
@@ -34,7 +33,7 @@ type Manager struct {
 
 // Returns a new order manager
 func New(bot *telebot.Bot, wallet *wallet.Wallet, db *database.DB, chainID int64, rpcURL, routerHex string) (*Manager, error) {
-	client, err := bsc_client.Dial(rpcURL)
+	client, err := blockclient.Dial(rpcURL)
 	if err != nil {
 		return nil, fmt.Errorf("could not connect to endpoint: %w", err)
 	}
@@ -54,12 +53,12 @@ func New(bot *telebot.Bot, wallet *wallet.Wallet, db *database.DB, chainID int64
 func (m *Manager) StartDBOrders() error {
 	orders, err := m.DB.GetOrders()
 	if err != nil {
-		return err
+		return fmt.Errorf("could not get orders: %w", err)
 	}
 
 	for _, order := range orders {
 		if err := order.Init(m.Client, m.RouterHex, m.ChainID); err != nil {
-			return fmt.Errorf("could not initialize order: %w", err)
+			return fmt.Errorf("could not initialize order with ID %d: %w", order.ID, err)
 		}
 
 		go m.checkPrices(order)
@@ -69,36 +68,28 @@ func (m *Manager) StartDBOrders() error {
 }
 
 // Adds a new order to the manager
-func (m *Manager) AddOrder(order *order.Order) error {
+func (m *Manager) AddOrder(order *order.Order) (*order.Order, error) {
 	if err := order.Init(m.Client, m.RouterHex, m.ChainID); err != nil {
-		return fmt.Errorf("could not initialize order: %w", err)
+		return nil, fmt.Errorf("could not initialize order: %w", err)
 	}
 
 	// Approve Order
-	tx, err := order.ApproveMax(m.Client, m.Wallet)
+	_, err := order.ApproveMax(m.Client, m.Wallet)
 	if err != nil {
-		return fmt.Errorf("could not approve order: %w", err)
+		return nil, fmt.Errorf("could not approve order: %w", err)
 	}
 
-	// Wait for it to be approved
-	if tx == nil {
-		log.Printf("Token %s was already approved\n", order.GetSellToken().Address.Hex())
-	} else {
-		_, err := m.Client.GetPendingTxReceipt(context.Background(), tx)
-		if err != nil {
-			return fmt.Errorf("could not wait for token approval: %w", err)
-		}
-	}
-
+	// Add order to database
 	order.ID, err = m.DB.AddOrder(order)
 	if err != nil {
-		return fmt.Errorf("could not add order to db: %w", err)
+		return nil, fmt.Errorf("could not add order to db: %w", err)
 	}
 
 	go m.checkPrices(order)
-	return nil
+	return order, nil
 }
 
+// TODO: Fix possible deadlock
 // Removes an order from the manager
 func (m *Manager) RemoveOrder(id uint) error {
 	m.channelsMutex.Lock()
@@ -134,22 +125,16 @@ func (m *Manager) checkPrices(order *order.Order) {
 		case currentPrice := <-priceChan:
 			floatPrice := price.RemoveDecimals(currentPrice, order.GetBuyToken().Decimals)
 			log.Printf("Current price for swap: %s\n", floatPrice.Text('f', 18))
-			tx, err := order.CompAndSwap(m.Client, m.Wallet, currentPrice)
+			receipt, err := order.CompAndSwap(m.Client, m.Wallet, currentPrice)
 			if err != nil {
 				log.Println(err)
 				return
 			}
 
-			if tx != nil {
+			if receipt != nil {
 				done <- true
-				log.Printf("Swap transaction %s <-> %s pending: %s\n", order.GetSellToken().Address.Hex(), order.GetBuyToken().Address.Hex(), tx.Hash().Hex())
-				_, err := m.Client.GetPendingTxReceipt(context.Background(), tx)
-				if err != nil {
-					log.Println(err)
-					return
-				}
 
-				log.Printf("Swap transaction %s <-> %s completed: %s\n", order.GetSellToken().Address.Hex(), order.GetBuyToken().Address.Hex(), tx.Hash().Hex())
+				log.Printf("Swap transaction %s <-> %s completed: %s\n", order.GetSellToken().Address.Hex(), order.GetBuyToken().Address.Hex(), receipt.TxHash.Hex())
 				if err := m.RemoveOrder(order.ID); err != nil {
 					log.Printf("Could not remove order %d\n", order.ID)
 					return
@@ -160,11 +145,6 @@ func (m *Manager) checkPrices(order *order.Order) {
 			log.Println(err)
 		case <-stopChan:
 			done <- true
-
-			m.channelsMutex.Lock()
-			delete(m.OrderChannels, order.ID)
-			m.channelsMutex.Unlock()
-
 			return
 		}
 	}

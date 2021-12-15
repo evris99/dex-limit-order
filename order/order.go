@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/evris99/dex-limit-order/blockclient"
 	"github.com/evris99/dex-limit-order/contracts/bep20_token"
 	"github.com/evris99/dex-limit-order/contracts/factory"
 	"github.com/evris99/dex-limit-order/contracts/pair"
@@ -158,7 +159,7 @@ func (o *Order) GetSellToken() *Token {
 
 // Executes the approve transaction if not already approved
 // Returns the transaction or nil if the token is already approved
-func (o *Order) Approve(c bind.ContractBackend, wallet *wallet.Wallet, ammount *big.Int) (*types.Transaction, error) {
+func (o *Order) Approve(c *blockclient.Client, wallet *wallet.Wallet, ammount *big.Int) (*types.Receipt, error) {
 	allowance, err := o.GetSellToken().Instance.Allowance(nil, wallet.GetAddress(), o.router.Address)
 	if err != nil {
 		return nil, err
@@ -174,21 +175,26 @@ func (o *Order) Approve(c bind.ContractBackend, wallet *wallet.Wallet, ammount *
 		return nil, err
 	}
 
-	return o.GetSellToken().Instance.Approve(auth, o.router.Address, ammount)
+	tx, err := o.GetSellToken().Instance.Approve(auth, o.router.Address, ammount)
+	if err != nil {
+		return nil, fmt.Errorf("could not approve token: %w", err)
+	}
+
+	return c.GetPendingTxReceipt(context.Background(), tx)
 }
 
 //Executes the approve transaction with the exact order sell amount
-func (o *Order) ApproveAmount(c bind.ContractBackend, wallet *wallet.Wallet) (*types.Transaction, error) {
+func (o *Order) ApproveAmount(c *blockclient.Client, wallet *wallet.Wallet) (*types.Receipt, error) {
 	return o.Approve(c, wallet, o.GetSellToken().Amount)
 }
 
 // Executes the approve transaction with the maximum amount
-func (o *Order) ApproveMax(c bind.ContractBackend, wallet *wallet.Wallet) (*types.Transaction, error) {
+func (o *Order) ApproveMax(c *blockclient.Client, wallet *wallet.Wallet) (*types.Receipt, error) {
 	return o.Approve(c, wallet, abi.MaxUint256)
 }
 
 // Executes the swap transaction
-func (o *Order) Swap(c bind.ContractBackend, wallet *wallet.Wallet, amountOut *big.Int) (*types.Transaction, error) {
+func (o *Order) Swap(c *blockclient.Client, wallet *wallet.Wallet, amountOut *big.Int) (*types.Receipt, error) {
 	auth, err := o.getTransactOpts(c, wallet)
 	if err != nil {
 		return nil, err
@@ -198,12 +204,17 @@ func (o *Order) Swap(c bind.ContractBackend, wallet *wallet.Wallet, amountOut *b
 	amountWithSlippage := new(big.Int).Sub(amountOut, price.MultiplyPercent(amountOut, o.Slippage))
 
 	deadline := big.NewInt(time.Now().Add(time.Minute * SwapDeadlineMin).Unix())
-	return o.router.Instance.SwapExactTokensForTokensSupportingFeeOnTransferTokens(auth, o.GetSellToken().Amount, amountWithSlippage, o.GetAddreses(), wallet.GetAddress(), deadline)
+	tx, err := o.router.Instance.SwapExactTokensForTokensSupportingFeeOnTransferTokens(auth, o.GetSellToken().Amount, amountWithSlippage, o.GetAddreses(), wallet.GetAddress(), deadline)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.GetPendingTxReceipt(context.Background(), tx)
 }
 
 // Compares the given amount with the wanted amount and returns the transaction or nil
 // if no transaction has been made
-func (o *Order) CompAndSwap(c bind.ContractBackend, wallet *wallet.Wallet, amount *big.Int) (*types.Transaction, error) {
+func (o *Order) CompAndSwap(c *blockclient.Client, wallet *wallet.Wallet, amount *big.Int) (*types.Receipt, error) {
 
 	if o.Type == Limit && amount.Cmp(o.GetBuyToken().Amount) != -1 {
 		return o.Swap(c, wallet, o.GetBuyToken().Amount)

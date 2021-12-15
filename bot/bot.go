@@ -121,13 +121,14 @@ func onFile(db *database.DB, bot *telebot.Bot, manager *manager.Manager) func(*t
 		}
 
 		order.UserID = user.ID
-		if err := manager.AddOrder(order); err != nil {
+		order, err = manager.AddOrder(order)
+		if err != nil {
 			log.Println(err)
 			bot.Send(m.Sender, "Could not add order")
 			return
 		}
 
-		bot.Send(m.Sender, "Order added")
+		bot.Send(m.Sender, "Order added:\n%s", getOrderMsg(*order))
 	}
 }
 

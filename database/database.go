@@ -32,14 +32,6 @@ func (db *DB) Migrate() error {
 	return db.SQL.AutoMigrate(&model.User{})
 }
 
-// Searches a user in the database based on the telegram ID
-func (db *DB) GetUserFromTelegramID(telegramID int64) (*model.User, error) {
-	user := new(model.User)
-	res := db.SQL.Where("telegram_id = ?", telegramID).First(user)
-
-	return user, res.Error
-}
-
 // Queries the database and returns an slice of all the orders
 func (db *DB) GetOrders() ([]*order.Order, error) {
 	var models []*model.Order
@@ -81,6 +73,14 @@ func (db *DB) GetOrdersByUser(telegramID int64) ([]*order.Order, error) {
 	return orders, nil
 }
 
+// Searches a user in the database based on the telegram ID
+func (db *DB) GetUserFromTelegramID(telegramID int64) (*model.User, error) {
+	user := new(model.User)
+	res := db.SQL.Where("telegram_id = ?", telegramID).First(user)
+
+	return user, res.Error
+}
+
 // Adds the given order to the database and returns its ID
 func (db *DB) AddOrder(order *order.Order) (uint, error) {
 	model, err := model.FromOrder(order)
@@ -95,6 +95,7 @@ func (db *DB) AddOrder(order *order.Order) (uint, error) {
 	return model.ID, nil
 }
 
+// Inserts a new user with the given fields to the database
 func (db *DB) AddUser(telegramID int64, username string) error {
 	user := &model.User{
 		TelegramID:       telegramID,

@@ -1,12 +1,12 @@
 # Mainnet
-endpoint_url = ""
-chain_id = 56
-pancakeswap_router_address = "0x10ED43C718714eb63d5aA57B78B54704E256024E"
+# endpoint_url = ""
+# chain_id = 56
+# pancakeswap_router_address = "0x10ED43C718714eb63d5aA57B78B54704E256024E"
 
 # Testnet
-# endpoint_url = ""
-# chain_id = 97
-# pancakeswap_router_address = "0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3"
+endpoint_url = ""
+chain_id = 97
+pancakeswap_router_address = "0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3"
 
 # Local development chain
 # endpoint_url = "ws://127.0.0.1:8545/"
@@ -20,5 +20,3 @@ wallet_password = "test"
 database_path = "./pancake.db"
 # Telegram API key
 telegram_api_key = ""
-# Allowed telegram users
-telegram_users = ["", ""]

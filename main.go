@@ -14,9 +14,19 @@ import (
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	// Load the configuration from the given file
+	walletPath := flag.String("n", "", "if set creates a wallet at the given path")
 	confPath := flag.String("c", "./configuration.toml", "the path to the configuration flag")
 	flag.Parse()
+
+	// Generate wallet and exit
+	if *walletPath != "" {
+		if _, err := wallet.GenerateFromTerm(*walletPath); err != nil {
+			log.Fatalln(err)
+		}
+		return
+	}
+
+	// Load the configuration from the given file
 	config, err := config.Load(*confPath)
 	if err != nil {
 		log.Fatalln(err)
