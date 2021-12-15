@@ -7,23 +7,20 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/evris99/dex-limit-order/database"
+	"github.com/evris99/dex-limit-order/manager"
 	"github.com/evris99/dex-limit-order/order"
 
-	"github.com/evris99/dex-limit-order/manager"
-
-	"github.com/evris99/dex-limit-order/database"
-
 	"gopkg.in/tucnak/telebot.v2"
-	"gorm.io/gorm"
 )
 
 // Creates and returns a new telebot instance
-func New(DB *gorm.DB, apiKey string) (*telebot.Bot, error) {
+func New(db *database.DB, apiKey string) (*telebot.Bot, error) {
 	// Use long polling
 	poller := &telebot.LongPoller{Timeout: 15 * time.Second}
 
 	// Limit usage to specific users
-	userFilter := telebot.NewMiddlewarePoller(poller, filter(DB))
+	userFilter := telebot.NewMiddlewarePoller(poller, filter(db))
 
 	//Initialize bot
 	bot, err := telebot.NewBot(telebot.Settings{
@@ -35,11 +32,14 @@ func New(DB *gorm.DB, apiKey string) (*telebot.Bot, error) {
 }
 
 // Starts the bot listening proccess
-func Listen(bot *telebot.Bot, DB *gorm.DB, manager *manager.Manager) {
+func Listen(bot *telebot.Bot, db *database.DB, manager *manager.Manager) {
+
+	// Button for listing orders
 	mainMenu := &telebot.ReplyMarkup{}
 	listBtn := mainMenu.Data("List orders", "list")
 	mainMenu.Inline(mainMenu.Row(listBtn))
 
+	// Button for removing order
 	orderMenu := &telebot.ReplyMarkup{}
 	removeBtn := mainMenu.Data("Remove order", "remove")
 
@@ -47,17 +47,18 @@ func Listen(bot *telebot.Bot, DB *gorm.DB, manager *manager.Manager) {
 		bot.Send(m.Sender, "Welcome to PancakeSwap limit order bot 🙂", mainMenu)
 	})
 
-	bot.Handle(telebot.OnDocument, onFile(DB, bot, manager))
+	bot.Handle(telebot.OnDocument, onFile(db, bot, manager))
 	bot.Handle(&removeBtn, onRemoveBtn(bot, manager))
 
 	bot.Handle(&listBtn, func(c *telebot.Callback) {
 		defer bot.Respond(c, &telebot.CallbackResponse{})
-		orders, err := database.GetOrdersByUser(DB, c.Sender.ID)
+		orders, err := db.GetOrdersByUser(c.Sender.ID)
 		if err != nil {
 			bot.Send(c.Sender, "Could not get orders")
 		}
 
 		for _, order := range orders {
+			// Add remove order button with correct order ID
 			removeBtn.Data = strconv.Itoa(int(order.ID))
 			orderMenu.Inline(orderMenu.Row(removeBtn))
 			bot.Send(c.Sender, getOrderMsg(*order), orderMenu)
@@ -68,7 +69,7 @@ func Listen(bot *telebot.Bot, DB *gorm.DB, manager *manager.Manager) {
 }
 
 // Filters incoming messages from users not in database
-func filter(db *gorm.DB) func(*telebot.Update) bool {
+func filter(db *database.DB) func(*telebot.Update) bool {
 	return func(u *telebot.Update) bool {
 		if u.Message == nil {
 			return true
@@ -76,7 +77,7 @@ func filter(db *gorm.DB) func(*telebot.Update) bool {
 
 		// Filter users that are not in config
 		// TODO: Use database along with redist
-		_, err := database.GetUserFromTelegramID(db, u.Message.Sender.ID)
+		_, err := db.GetUserFromTelegramID(u.Message.Sender.ID)
 		if err != nil {
 			log.Println(err)
 			return false
@@ -87,7 +88,7 @@ func filter(db *gorm.DB) func(*telebot.Update) bool {
 }
 
 // Returns a callback for handling a document upload
-func onFile(DB *gorm.DB, bot *telebot.Bot, manager *manager.Manager) func(*telebot.Message) {
+func onFile(db *database.DB, bot *telebot.Bot, manager *manager.Manager) func(*telebot.Message) {
 	return func(m *telebot.Message) {
 		if m.Document == nil {
 			return
@@ -112,7 +113,7 @@ func onFile(DB *gorm.DB, bot *telebot.Bot, manager *manager.Manager) func(*teleb
 			bot.Send(m.Sender, "Invalid file")
 			return
 		}
-		user, err := database.GetUserFromTelegramID(DB, m.Sender.ID)
+		user, err := db.GetUserFromTelegramID(m.Sender.ID)
 		if err != nil {
 			log.Println(err)
 			bot.Send(m.Sender, "Invalid user")

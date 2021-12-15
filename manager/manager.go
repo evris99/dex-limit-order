@@ -7,20 +7,14 @@ import (
 	"log"
 	"sync"
 
+	"github.com/evris99/dex-limit-order/bsc_client"
+	"github.com/evris99/dex-limit-order/database"
+	"github.com/evris99/dex-limit-order/database/model"
+	"github.com/evris99/dex-limit-order/order"
+	"github.com/evris99/dex-limit-order/price"
 	"github.com/evris99/dex-limit-order/wallet"
 
-	"github.com/evris99/dex-limit-order/price"
-
-	"github.com/evris99/dex-limit-order/order"
-
-	"github.com/evris99/dex-limit-order/database/model"
-
-	"github.com/evris99/dex-limit-order/database"
-
-	"github.com/evris99/dex-limit-order/bsc_client"
-
 	"gopkg.in/tucnak/telebot.v2"
-	"gorm.io/gorm"
 )
 
 var (
@@ -34,12 +28,12 @@ type Manager struct {
 	RouterHex     string
 	OrderChannels map[uint]chan bool
 	channelsMutex sync.Mutex
-	DB            *gorm.DB
+	DB            *database.DB
 	Bot           *telebot.Bot
 }
 
 // Returns a new order manager
-func New(bot *telebot.Bot, wallet *wallet.Wallet, DB *gorm.DB, chainID int64, rpcURL, routerHex string) (*Manager, error) {
+func New(bot *telebot.Bot, wallet *wallet.Wallet, db *database.DB, chainID int64, rpcURL, routerHex string) (*Manager, error) {
 	client, err := bsc_client.Dial(rpcURL)
 	if err != nil {
 		return nil, fmt.Errorf("could not connect to endpoint: %w", err)
@@ -51,14 +45,14 @@ func New(bot *telebot.Bot, wallet *wallet.Wallet, DB *gorm.DB, chainID int64, rp
 		ChainID:       chainID,
 		RouterHex:     routerHex,
 		OrderChannels: make(map[uint]chan bool),
-		DB:            DB,
+		DB:            db,
 		Bot:           bot,
 	}, nil
 }
 
 // Add the existing database orders to the manager
 func (m *Manager) StartDBOrders() error {
-	orders, err := database.GetOrders(m.DB)
+	orders, err := m.DB.GetOrders()
 	if err != nil {
 		return err
 	}
@@ -96,7 +90,7 @@ func (m *Manager) AddOrder(order *order.Order) error {
 		}
 	}
 
-	order.ID, err = database.AddOrder(m.DB, order)
+	order.ID, err = m.DB.AddOrder(order)
 	if err != nil {
 		return fmt.Errorf("could not add order to db: %w", err)
 	}
@@ -120,7 +114,7 @@ func (m *Manager) RemoveOrder(id uint) error {
 	delete(m.OrderChannels, id)
 	m.channelsMutex.Unlock()
 
-	return m.DB.Delete(&model.Order{}, id).Error
+	return m.DB.SQL.Delete(&model.Order{}, id).Error
 }
 
 // TODO: Clean up the code and add sending on success or failure

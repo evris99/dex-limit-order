@@ -9,17 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/evris99/dex-limit-order/wallet"
-
-	"github.com/evris99/dex-limit-order/price"
-
-	"github.com/evris99/dex-limit-order/contracts/router"
-
-	"github.com/evris99/dex-limit-order/contracts/pair"
-
-	"github.com/evris99/dex-limit-order/contracts/factory"
-
 	"github.com/evris99/dex-limit-order/contracts/bep20_token"
+	"github.com/evris99/dex-limit-order/contracts/factory"
+	"github.com/evris99/dex-limit-order/contracts/pair"
+	"github.com/evris99/dex-limit-order/contracts/router"
+	"github.com/evris99/dex-limit-order/price"
+	"github.com/evris99/dex-limit-order/wallet"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"

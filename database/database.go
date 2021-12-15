@@ -3,24 +3,47 @@ package database
 import (
 	"fmt"
 
+	"github.com/evris99/dex-limit-order/database/model"
 	"github.com/evris99/dex-limit-order/order"
 
-	"github.com/evris99/dex-limit-order/database/model"
-
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
-func GetUserFromTelegramID(DB *gorm.DB, telegramID int64) (*model.User, error) {
+type DB struct {
+	SQL *gorm.DB
+}
+
+// Creates a new database connection
+func New(dbPath string) (*DB, error) {
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	if err != nil {
+		return nil, fmt.Errorf("could not open database: %w", err)
+	}
+
+	return &DB{db}, nil
+}
+
+func (db *DB) Migrate() error {
+	if err := db.SQL.AutoMigrate(&model.Order{}); err != nil {
+		return err
+	}
+
+	return db.SQL.AutoMigrate(&model.User{})
+}
+
+// Searches a user in the database based on the telegram ID
+func (db *DB) GetUserFromTelegramID(telegramID int64) (*model.User, error) {
 	user := new(model.User)
-	res := DB.Where("telegram_id = ?", telegramID).First(user)
+	res := db.SQL.Where("telegram_id = ?", telegramID).First(user)
 
 	return user, res.Error
 }
 
 // Queries the database and returns an slice of all the orders
-func GetOrders(DB *gorm.DB) ([]*order.Order, error) {
+func (db *DB) GetOrders() ([]*order.Order, error) {
 	var models []*model.Order
-	res := DB.Find(&models)
+	res := db.SQL.Find(&models)
 	if res.Error != nil {
 		return nil, fmt.Errorf("could not get orders from db: %w", res.Error)
 	}
@@ -38,9 +61,9 @@ func GetOrders(DB *gorm.DB) ([]*order.Order, error) {
 }
 
 // Queries the database and returns a slice of orders matching the user
-func GetOrdersByUser(DB *gorm.DB, telegramID int64) ([]*order.Order, error) {
+func (db *DB) GetOrdersByUser(telegramID int64) ([]*order.Order, error) {
 	var user model.User
-	res := DB.Where("telegram_id = ?", telegramID).First(&user)
+	res := db.SQL.Where("telegram_id = ?", telegramID).First(&user)
 
 	if res.Error != nil {
 		return nil, fmt.Errorf("could not get orders from db: %w", res.Error)
@@ -59,12 +82,12 @@ func GetOrdersByUser(DB *gorm.DB, telegramID int64) ([]*order.Order, error) {
 }
 
 // Adds the given order to the database and returns its ID
-func AddOrder(DB *gorm.DB, order *order.Order) (uint, error) {
+func (db *DB) AddOrder(order *order.Order) (uint, error) {
 	model, err := model.FromOrder(order)
 	if err != nil {
 		return 0, fmt.Errorf("could not convert order to model: %w", err)
 	}
-	res := DB.Create(model)
+	res := db.SQL.Create(model)
 	if res.Error != nil {
 		return 0, fmt.Errorf("could not create order: %w", err)
 	}
@@ -72,11 +95,11 @@ func AddOrder(DB *gorm.DB, order *order.Order) (uint, error) {
 	return model.ID, nil
 }
 
-func AddUser(DB *gorm.DB, telegramID int64, username string) error {
+func (db *DB) AddUser(telegramID int64, username string) error {
 	user := &model.User{
 		TelegramID:       telegramID,
 		TelegramUserName: username,
 	}
 
-	return DB.Create(user).Error
+	return db.SQL.Create(user).Error
 }

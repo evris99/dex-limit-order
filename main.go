@@ -4,18 +4,11 @@ import (
 	"flag"
 	"log"
 
-	"github.com/evris99/dex-limit-order/wallet"
-
-	"github.com/evris99/dex-limit-order/manager"
-
-	"github.com/evris99/dex-limit-order/database/model"
-
-	"github.com/evris99/dex-limit-order/config"
-
 	"github.com/evris99/dex-limit-order/bot"
-
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
+	"github.com/evris99/dex-limit-order/config"
+	"github.com/evris99/dex-limit-order/database"
+	"github.com/evris99/dex-limit-order/manager"
+	"github.com/evris99/dex-limit-order/wallet"
 )
 
 func main() {
@@ -36,21 +29,23 @@ func main() {
 	}
 
 	// Creates a database connection
-	DB, err := gorm.Open(sqlite.Open(config.DBPath), &gorm.Config{})
+	DB, err := database.New(config.DBPath)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	// Migrates the database
-	if err := migrate(DB); err != nil {
+	if err := DB.Migrate(); err != nil {
 		log.Fatalln(err)
 	}
 
+	// Initialize telegram bot
 	telegramBot, err := bot.New(DB, config.TelegramAPIKey)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
+	// Create order manager
 	manager, err := manager.New(telegramBot, wallet, DB, config.ChainID, config.EndpointURL, config.PancakeRouterHex)
 	if err != nil {
 		log.Fatalln(err)
@@ -62,13 +57,4 @@ func main() {
 	}
 
 	bot.Listen(telegramBot, DB, manager)
-}
-
-// Migrates the database
-func migrate(DB *gorm.DB) error {
-	if err := DB.AutoMigrate(&model.Order{}); err != nil {
-		return err
-	}
-
-	return DB.AutoMigrate(&model.User{})
 }
