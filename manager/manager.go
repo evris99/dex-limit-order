@@ -8,7 +8,6 @@ import (
 
 	"github.com/evris99/dex-limit-order/blockclient"
 	"github.com/evris99/dex-limit-order/database"
-	"github.com/evris99/dex-limit-order/database/model"
 	"github.com/evris99/dex-limit-order/order"
 	"github.com/evris99/dex-limit-order/price"
 	"github.com/evris99/dex-limit-order/wallet"
@@ -89,43 +88,47 @@ func (m *Manager) AddOrder(order *order.Order) (*order.Order, error) {
 	return order, nil
 }
 
-// TODO: Fix possible deadlock
 // Removes an order from the manager
 func (m *Manager) RemoveOrder(id uint) error {
+	// Get stop channel for the order
 	m.channelsMutex.Lock()
-	channel, ok := m.OrderChannels[id]
+	stopChan, ok := m.OrderChannels[id]
 	m.channelsMutex.Unlock()
 
 	if !ok {
 		return ErrOrderNotFound
 	}
 
-	channel <- true
+	// Signal the manager to stop checking prices
+	stopChan <- true
+
+	// Delete channel from map
 	m.channelsMutex.Lock()
 	delete(m.OrderChannels, id)
 	m.channelsMutex.Unlock()
 
-	return m.DB.SQL.Delete(&model.Order{}, id).Error
+	return m.DB.DeleteOrder(id)
 }
 
-// TODO: Clean up the code and add sending on success or failure
+// TODO: Add sending on success or failure
 // Compares a stream o prices and swaps the tokens if the price is right
-func (m *Manager) checkPrices(order *order.Order) {
+func (m *Manager) checkPrices(o *order.Order) {
+	// May need to make stop channel buffered
 	done, stopChan := make(chan bool), make(chan bool)
 
 	// Saves the channel for stopping the order
 	m.channelsMutex.Lock()
-	m.OrderChannels[order.ID] = stopChan
+	m.OrderChannels[o.ID] = stopChan
 	m.channelsMutex.Unlock()
 
-	priceChan, errChan := order.GetPriceStream(m.Client, done)
-	log.Printf("Started watching order #%d\n", order.ID)
+	priceChan, errChan := o.GetPriceStream(m.Client, done)
+	log.Printf("Started watching order #%d\n", o.ID)
 	for {
 		select {
 		case currentPrice := <-priceChan:
-			floatPrice := price.RemoveDecimals(currentPrice, order.GetBuyToken().Decimals)
+			floatPrice := price.RemoveDecimals(currentPrice, o.GetBuyToken().Decimals)
 			log.Printf("Current price for swap: %s\n", floatPrice.Text('f', 18))
-			receipt, err := order.CompAndSwap(m.Client, m.Wallet, currentPrice)
+			receipt, err := o.CompAndSwap(m.Client, m.Wallet, currentPrice)
 			if err != nil {
 				log.Println(err)
 				return
@@ -133,16 +136,24 @@ func (m *Manager) checkPrices(order *order.Order) {
 
 			if receipt != nil {
 				done <- true
+				log.Printf("Swap transaction %s <-> %s completed: %s\n", o.GetSellToken().Address.Hex(), o.GetBuyToken().Address.Hex(), receipt.TxHash.Hex())
 
-				log.Printf("Swap transaction %s <-> %s completed: %s\n", order.GetSellToken().Address.Hex(), order.GetBuyToken().Address.Hex(), receipt.TxHash.Hex())
-				if err := m.RemoveOrder(order.ID); err != nil {
-					log.Printf("Could not remove order %d\n", order.ID)
-					return
+				// Delete channel from map
+				m.channelsMutex.Lock()
+				delete(m.OrderChannels, o.ID)
+				m.channelsMutex.Unlock()
+
+				if err := m.DB.DeleteOrder(o.ID); err != nil {
+					log.Printf("Could not delete order from database: %s", err)
 				}
+
 				return
 			}
 		case err := <-errChan:
 			log.Println(err)
+			if !errors.Is(err, order.ErrCanContinue) {
+				return
+			}
 		case <-stopChan:
 			done <- true
 			return

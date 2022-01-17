@@ -1,0 +1,9 @@
+{
+    "type": "limit",
+    "path": ["0x78867bbeef44f2326bf8ddd1941a4439382ef2a7", "0xae13d989dac2f0debff460ac112a837c89baa7cd"],
+    "sell_amount": "600",
+    "buy_amount": "1.1",
+    "slippage": 1.5,
+    "gas_price_multiplier": 200,
+    "gas_limit": 200000
+}

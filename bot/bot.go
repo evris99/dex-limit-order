@@ -76,7 +76,6 @@ func filter(db *database.DB) func(*telebot.Update) bool {
 		}
 
 		// Filter users that are not in config
-		// TODO: Use database along with redist
 		_, err := db.GetUserFromTelegramID(u.Message.Sender.ID)
 		if err != nil {
 			log.Println(err)

@@ -3,6 +3,7 @@ package blockclient
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"math/big"
 
@@ -258,7 +259,7 @@ func (c *Client) GetPendingTxReceipt(ctx context.Context, tx *types.Transaction)
 			}
 
 			if receipt.Status == 0 {
-				return nil, ErrReceiptStatus
+				return nil, fmt.Errorf("transaction %s failed: %w", receipt.TxHash.Hex(), ErrReceiptStatus)
 			}
 
 			return receipt, nil

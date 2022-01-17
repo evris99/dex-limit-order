@@ -28,12 +28,14 @@ const (
 	// The interval to check the price in Milliseconds
 	CheckIntervalMil time.Duration = 500
 	// The deadline for completing the swap in Minutes
-	SwapDeadlineMin time.Duration = 20
+	SwapDeadlineMin  time.Duration = 20
+	PriceChannelSize int           = 100
 )
 
 var (
 	ErrConv        = errors.New("could not convert amount to big int")
 	ErrInvalidType = errors.New("invalid type value")
+	ErrCanContinue = errors.New("can continue execution")
 )
 
 type Type int
@@ -230,7 +232,7 @@ func (o *Order) CompAndSwap(c *blockclient.Client, wallet *wallet.Wallet, amount
 // Returns a price channel for receiving a stream of prices and a channel for error.
 // Stops only when it receives from the done channel
 func (o *Order) GetPriceStream(c bind.ContractBackend, done <-chan bool) (chan *big.Int, chan error) {
-	priceChan, errChan := make(chan *big.Int), make(chan error)
+	priceChan, errChan := make(chan *big.Int, PriceChannelSize), make(chan error)
 
 	go func() {
 		pairInstance, err := getPair(c, o.router.Instance, o.tokens[0].Address, o.tokens[1].Address)
@@ -246,13 +248,13 @@ func (o *Order) GetPriceStream(c bind.ContractBackend, done <-chan bool) (chan *
 			sub, err := pairInstance.WatchSync(nil, syncChan)
 			if err != nil {
 				errChan <- err
-				continue
+				return
 			}
 
 			buyAmount, err := o.GetBuyAmount()
 			if err != nil {
 				errChan <- err
-				continue
+				return
 			}
 
 			priceChan <- buyAmount
@@ -264,14 +266,15 @@ func (o *Order) GetPriceStream(c bind.ContractBackend, done <-chan bool) (chan *
 					buyAmount, err := o.GetBuyAmount()
 					if err != nil {
 						errChan <- err
-						break streamLoop
+						return
 					}
 
 					priceChan <- buyAmount
 				case err := <-sub.Err():
-					errChan <- err
+					errChan <- fmt.Errorf("subscription error: %s, type: %w", err, ErrCanContinue)
 					break streamLoop
 				case <-done:
+					sub.Unsubscribe()
 					return
 				}
 			}

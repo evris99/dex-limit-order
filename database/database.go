@@ -104,3 +104,7 @@ func (db *DB) AddUser(telegramID int64, username string) error {
 
 	return db.SQL.Create(user).Error
 }
+
+func (db *DB) DeleteOrder(orderID uint) error {
+	return db.SQL.Delete(&model.Order{}, orderID).Error
+}
