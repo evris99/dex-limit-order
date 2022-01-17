@@ -78,6 +78,14 @@ func (db *DB) GetUserFromTelegramID(telegramID int64) (*model.User, error) {
 	return user, res.Error
 }
 
+// Returns the user with the corresponding ID
+func (db *DB) GetUser(id uint) (*model.User, error) {
+	user := new(model.User)
+	res := db.SQL.First(user, id)
+
+	return user, res.Error
+}
+
 // Adds the given order to the database and returns its ID
 func (db *DB) AddOrder(order *order.Order) (uint, error) {
 	model, err := model.FromOrder(order)

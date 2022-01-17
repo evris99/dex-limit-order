@@ -12,8 +12,6 @@ import (
 )
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-
 	walletPath := flag.String("wallet", "", "if set creates a wallet at the given path")
 	confPath := flag.String("config", "./configuration.toml", "the path to the configuration flag")
 	userID := flag.Int64("new_user_id", -1, "a user telegram ID to add to the database")
