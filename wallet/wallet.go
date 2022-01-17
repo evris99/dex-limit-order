@@ -66,7 +66,6 @@ func LoadWithPassword(path, password string) (*Wallet, error) {
 	}
 
 	if len(wallet.KeyStore.Accounts()) != 1 {
-		//TODO: Make user choose account
 		return nil, ErrIncorrectAccounts
 	}
 

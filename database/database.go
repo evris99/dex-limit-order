@@ -24,12 +24,9 @@ func New(dbPath string) (*DB, error) {
 	return &DB{db}, nil
 }
 
+// Migrates the database
 func (db *DB) Migrate() error {
-	if err := db.SQL.AutoMigrate(&model.Order{}); err != nil {
-		return err
-	}
-
-	return db.SQL.AutoMigrate(&model.User{})
+	return db.SQL.AutoMigrate(&model.User{}, &model.Order{})
 }
 
 // Queries the database and returns an slice of all the orders
@@ -96,15 +93,12 @@ func (db *DB) AddOrder(order *order.Order) (uint, error) {
 }
 
 // Inserts a new user with the given fields to the database
-func (db *DB) AddUser(telegramID int64, username string) error {
-	user := &model.User{
-		TelegramID:       telegramID,
-		TelegramUserName: username,
-	}
-
+func (db *DB) AddUser(telegramID int64) error {
+	user := &model.User{TelegramID: telegramID}
 	return db.SQL.Create(user).Error
 }
 
+// Deletes the order with the given ID
 func (db *DB) DeleteOrder(orderID uint) error {
 	return db.SQL.Delete(&model.Order{}, orderID).Error
 }

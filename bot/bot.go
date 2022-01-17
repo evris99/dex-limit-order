@@ -142,7 +142,7 @@ func onRemoveBtn(bot *telebot.Bot, manager *manager.Manager) func(*telebot.Callb
 		id, err := strconv.Atoi(c.Data)
 		if err != nil {
 			log.Println(err)
-			bot.Send(c.Sender, "something went wrong")
+			bot.Send(c.Sender, "Something went wrong")
 			return
 		}
 

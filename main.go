@@ -14,8 +14,9 @@ import (
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	walletPath := flag.String("n", "", "if set creates a wallet at the given path")
-	confPath := flag.String("c", "./configuration.toml", "the path to the configuration flag")
+	walletPath := flag.String("wallet", "", "if set creates a wallet at the given path")
+	confPath := flag.String("config", "./configuration.toml", "the path to the configuration flag")
+	userID := flag.Int64("new_user_id", -1, "a user telegram ID to add to the database")
 	flag.Parse()
 
 	// Generate wallet and exit
@@ -23,7 +24,7 @@ func main() {
 		if _, err := wallet.GenerateFromTerm(*walletPath); err != nil {
 			log.Fatalln(err)
 		}
-		return
+		log.Fatalln("Successfully created wallet")
 	}
 
 	// Load the configuration from the given file
@@ -32,14 +33,22 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	// Initializes a wallet instance
-	wallet, err := wallet.LoadWithPassword(config.WalletPath, config.Password)
+	// Creates a database connection
+	DB, err := database.New(config.DBPath)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	// Creates a database connection
-	DB, err := database.New(config.DBPath)
+	// Create new user and exit
+	if *userID != -1 {
+		if err := DB.AddUser(*userID); err != nil {
+			log.Fatalln(err)
+		}
+		log.Fatalf("Successfully added user with telegram ID: %d", *userID)
+	}
+
+	// Initializes a wallet instance
+	wallet, err := wallet.LoadWithPassword(config.WalletPath, config.Password)
 	if err != nil {
 		log.Fatalln(err)
 	}
