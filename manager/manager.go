@@ -110,7 +110,6 @@ func (m *Manager) RemoveOrder(id uint) error {
 	return m.DB.DeleteOrder(id)
 }
 
-// TODO: Add sending on success or failure
 // Compares a stream o prices and swaps the tokens if the price is right
 func (m *Manager) checkPrices(o *order.Order) {
 	// May need to make stop channel buffered
@@ -131,6 +130,13 @@ func (m *Manager) checkPrices(o *order.Order) {
 			receipt, err := o.CompAndSwap(m.Client, m.Wallet, currentPrice)
 			if err != nil {
 				log.Println(err)
+				if err := m.NotifyFailure(o, err); err != nil {
+					log.Println(err)
+				}
+
+				if err := m.DB.DeleteOrder(o.ID); err != nil {
+					log.Printf("Could not delete order from database: %s", err)
+				}
 				return
 			}
 
@@ -159,4 +165,26 @@ func (m *Manager) checkPrices(o *order.Order) {
 			return
 		}
 	}
+}
+
+// Sends a success message to the user
+func (m *Manager) NotifySuccess(order *order.Order) error {
+	user, err := m.DB.GetUser(order.UserID)
+	if err != nil {
+		return err
+	}
+
+	_, err = m.Bot.Send(&telebot.User{ID: user.TelegramID}, fmt.Sprintf("Order #%d successful", order.ID))
+	return err
+}
+
+// Sends a failure message to the user
+func (m *Manager) NotifyFailure(order *order.Order, notifyErr error) error {
+	user, err := m.DB.GetUser(order.UserID)
+	if err != nil {
+		return err
+	}
+
+	_, err = m.Bot.Send(&telebot.User{ID: user.TelegramID}, fmt.Sprintf("Order #%d failed. Error: %s", order.ID, notifyErr))
+	return err
 }
