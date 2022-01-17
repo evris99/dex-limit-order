@@ -57,6 +57,10 @@ func Listen(bot *telebot.Bot, db *database.DB, manager *manager.Manager) {
 			bot.Send(c.Sender, "Could not get orders")
 		}
 
+		if len(orders) == 0 {
+			bot.Send(c.Sender, "No active orders")
+		}
+
 		for _, order := range orders {
 			// Add remove order button with correct order ID
 			removeBtn.Data = strconv.Itoa(int(order.ID))

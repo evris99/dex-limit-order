@@ -55,7 +55,7 @@ func (db *DB) GetOrders() ([]*order.Order, error) {
 // Queries the database and returns a slice of orders matching the user
 func (db *DB) GetOrdersByUser(telegramID int64) ([]*order.Order, error) {
 	var user model.User
-	res := db.SQL.Where("telegram_id = ?", telegramID).First(&user)
+	res := db.SQL.Preload("Orders").Where("telegram_id = ?", telegramID).First(&user)
 
 	if res.Error != nil {
 		return nil, fmt.Errorf("could not get orders from db: %w", res.Error)
