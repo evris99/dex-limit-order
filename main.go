@@ -75,5 +75,6 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	log.Println("Bot started")
 	bot.Listen(telegramBot, DB, manager)
 }
