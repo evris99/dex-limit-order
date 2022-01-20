@@ -131,7 +131,7 @@ func onFile(db *database.DB, bot *telebot.Bot, manager *manager.Manager) func(*t
 			return
 		}
 
-		bot.Send(m.Sender, "Order added:\n%s", getOrderMsg(*order))
+		bot.Send(m.Sender, fmt.Sprintf("Order added:\n%s", getOrderMsg(*order)))
 	}
 }
 
